@@ -11,3 +11,6 @@ weather:
     city: 4517
     mode: hourly|daily
 ```
+
+city code - number at end of url, for example:  
+https://www.gismeteo.ru/weather-yekaterinburg-4517/
