@@ -175,7 +175,6 @@ class GismeteoWeather(WeatherEntity):
         if self._mode == 'hourly':
             for f in xml.findall('location/day/forecast'):
                 v = f.find('values')
-                ET.dump(v)
                 data_out = {}
                 data_out[ATTR_FORECAST_TIME] = dt_to_utc(f.get('valid'), offset)
                 data_out[ATTR_FORECAST_CONDITION] = v.get('descr')
