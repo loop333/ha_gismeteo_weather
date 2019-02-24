@@ -158,6 +158,8 @@ class GismeteoWeather(WeatherEntity):
 
         if self._mode == 'daily':
             for d in xml.findall('location/day[@descr]'):
+                if datetime.fromisoformat(d.get('date')) + timedelta(days=1) < datetime.now():
+                    continue
                 data_out = {}
                 data_out[ATTR_FORECAST_TIME] = dt_to_utc(d.get('date'), offset)
                 data_out[ATTR_FORECAST_CONDITION] = d.get('descr')
@@ -174,6 +176,8 @@ class GismeteoWeather(WeatherEntity):
 
         if self._mode == 'hourly':
             for f in xml.findall('location/day/forecast'):
+                if datetime.fromisoformat(f.get('valid')) < datetime.now():
+                    continue
                 v = f.find('values')
                 data_out = {}
                 data_out[ATTR_FORECAST_TIME] = dt_to_utc(f.get('valid'), offset)
