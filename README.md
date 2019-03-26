@@ -1,10 +1,11 @@
 # Gismeteo.ru Home Assistant Weather Component
 
-place in ./homeassistant/custom_components/weather  
-
-config:  
-
+```sh
+cd ~/.homeassistant/custom_components  
+git clone https://github.com/loop333/ha_gismeteo_weather gismeteo
 ```
+configuration.yaml:  
+```yaml
 weather:
   - platform: gismeteo
     name: any_optional_name
