@@ -1,5 +1,6 @@
 # Gismeteo.ru Home Assistant Weather Component
 
+install:  
 ```sh
 cd ~/.homeassistant/custom_components  
 git clone https://github.com/loop333/ha_gismeteo_weather gismeteo
