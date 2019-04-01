@@ -18,9 +18,11 @@ from homeassistant.util import Throttle
 
 class mylogger():
     def debug(self, format, *args):
-        print(format % args)
+        print('debug: '+format % args)
     def warning(self, format, *args):
-        print(format % args)
+        print('warning: '+format % args)
+    def error(self, format, *args):
+        print('error: '+format % args)
 
 if __name__ == '__main__':
     _LOGGER = mylogger()
@@ -34,6 +36,7 @@ URL = "https://services.gismeteo.ru/inform-service/inf_ios/forecast/?city={}&lan
 MIN_TIME_BETWEEN_UPDATES = timedelta(seconds=300)
 MMHG2HPA = 1.333223684
 DIRECTIONS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+ATTR_FORECAST_TEXT_CONDITION = 'text_condition'
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
@@ -47,6 +50,33 @@ def dt_to_utc(dt, offset):
     local_dt_with_tz = local_dt.replace(tzinfo=local_tz)
     utc_dt = local_dt_with_tz.astimezone(timezone.utc)
     return utc_dt.isoformat()
+
+def _condition(tod, d):
+    if int(d.get('ts'))==1 and int(d.get('pt'))==1:
+        return 'lightning'
+    if int(d.get('ts'))==1 and int(d.get('pt'))!=1:
+        return 'lightning-rainy'
+    if int(d.get('pt'))==1 and int(d.get('pr'))==3:
+        return 'pouring'
+    if int(d.get('pt')) == 1:
+        return 'rainy'
+    if int(d.get('pt')) == 2:
+        return 'snowy'
+    if int(d.get('ws')) > 7:
+        return 'windy'
+    if int(d.get('cl')) in [2, 3]:
+        return 'cloudy'
+    if int(d.get('cl')) in [1, 101]:
+        return 'partlycloudy'
+    if tod==0 and int(d.get('cl'))==0:
+        return 'clear-night'
+    if tod!=0 and int(d.get('cl'))==0:
+        return 'sunny'
+
+    _LOGGER.error('Unknown condition:')
+    for a in d.attrib:
+        _LOGGER.error(' %s=%s', a, d.attrib[a])
+    return d.get('descr')
 
 def setup_platform(hass, config, add_entities, discovery_info=None):
     """Set up the Gismeteo weather"""
@@ -71,6 +101,7 @@ class GismeteoWeather(WeatherEntity):
         self._temperature = None
         self._pressure = None
         self._condition = None
+        self._text_condition = None
         self._humidity = None
         self._visibility = None
         self._wind_speed = None
@@ -89,6 +120,11 @@ class GismeteoWeather(WeatherEntity):
     def condition(self):
         """Return the current condition."""
         return self._condition
+
+    @property
+    def text_condition(self):
+        """Return the current text condition."""
+        return self._text_condition
 
     @property
     def temperature(self):
@@ -149,7 +185,8 @@ class GismeteoWeather(WeatherEntity):
 
     @property
     def device_state_attributes(self):
-        return {'cloudiness': self.cloudiness,
+        return {'text_condition': self.text_condition,
+                'cloudiness': self.cloudiness,
                 'gmfield': self.gmfield,
                 'ph': self.ph}
 
@@ -173,7 +210,8 @@ class GismeteoWeather(WeatherEntity):
         wd = int(fv.get('wd'))
         if wd > 0: wd = wd - 1
         self._wind_bearing = DIRECTIONS[wd]
-        self._condition = fv.get('descr')
+        self._text_condition = fv.get('descr')
+        self._condition = _condition(int(fact.get('tod')), fv)
         self._visibility = None
         self._cloudiness = int(fv.get('cl'))
         self._gmfield = int(fv.get('grade'))
@@ -187,7 +225,8 @@ class GismeteoWeather(WeatherEntity):
                     continue
                 data_out = {}
                 data_out[ATTR_FORECAST_TIME] = dt_to_utc(d.get('date'), offset)
-                data_out[ATTR_FORECAST_CONDITION] = d.get('descr')
+                data_out[ATTR_FORECAST_TEXT_CONDITION] = d.get('descr')
+                data_out[ATTR_FORECAST_CONDITION] = _condition(2, d)
                 data_out[ATTR_FORECAST_TEMP_LOW] = int(d.get('tmin'))
                 data_out[ATTR_FORECAST_TEMP] = int(d.get('tmax'))
                 data_out[ATTR_FORECAST_WIND_SPEED] = int(d.get('ws'))
@@ -198,13 +237,16 @@ class GismeteoWeather(WeatherEntity):
                 self._forecast.append(data_out)
 
         if self._mode == 'hourly':
+            tod = 0
             for f in xml.findall('location/day/forecast'):
                 if datetime.fromisoformat(f.get('valid')) < datetime.now():
                     continue
                 v = f.find('values')
                 data_out = {}
                 data_out[ATTR_FORECAST_TIME] = dt_to_utc(f.get('valid'), offset)
-                data_out[ATTR_FORECAST_CONDITION] = v.get('descr')
+                data_out[ATTR_FORECAST_TEXT_CONDITION] = v.get('descr')
+                if int(f.get('tod')) != -1: tod = int(f.get('tod'))
+                data_out[ATTR_FORECAST_CONDITION] = _condition(tod, v)
 #                data_out[ATTR_FORECAST_TEMP_LOW] = int(d.get('tmin'))
                 data_out[ATTR_FORECAST_TEMP] = int(v.get('t'))
                 data_out[ATTR_FORECAST_WIND_SPEED] = int(v.get('ws'))
@@ -215,11 +257,11 @@ class GismeteoWeather(WeatherEntity):
                 self._forecast.append(data_out)
 
 if __name__ == '__main__':
-#    print(dt_to_utc('2019-02-22T05:00:00', 300))
-#    quit()
-    gismeteo = GismeteoWeather('gismeteo', '4517', 'daily')
+#    gismeteo = GismeteoWeather('gismeteo', '4517', 'daily')
+    gismeteo = GismeteoWeather('gismeteo', '4517', 'hourly')
     gismeteo.update()
-#    print(gismeteo.wind_bearing)
+    print(gismeteo.condition)
+    print('----------------------')
     print(gismeteo.device_state_attributes)
     for i in gismeteo.forecast:
         print(i)
