@@ -1,0 +1,1 @@
+""" Custom Gismeteo Weather component """
